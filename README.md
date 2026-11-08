@@ -88,8 +88,11 @@ On NLR-managed laptops, Netskope blocks ngrok. Instead, send a correctly signed 
 ```sh
 python scripts/send_test_event.py --event ping      # expect: 200 {"status":"pong"}
 python scripts/send_test_event.py                   # fake discussion comment -> email
-python scripts/send_test_event.py --event discussion --body "Why does my run fail?"
+python scripts/send_test_event.py --event discussion --title "Run failed" --body "Why does my run fail?"
+python scripts/send_test_event.py --event discussion --title "Battery sizing" --body-file post.md
 ```
+
+`--title`, `--body` / `--body-file` and `--author` stand in for what a user would post on GitHub.
 
 It reads `GITHUB_WEBHOOK_SECRET` from `.env`. Use `--url https://<host>/webhook --secret <secret>` to target a deployment.
 

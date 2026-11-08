@@ -1,6 +1,6 @@
 ---
 name: Troubleshooting errors
-keywords: error, errors, fail, fails, failed, failing, exception, crash, traceback, "stack trace", infeasible, bug
+keywords: error, errors, errored, erroring, fail, fails, failed, failing, failure, exception, crash, crashed, traceback, "stack trace", infeasible, bug, broken
 always: false
 ---
 <!-- Starter skill: review and refine with REopt-specific details. -->
