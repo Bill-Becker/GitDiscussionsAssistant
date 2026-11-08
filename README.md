@@ -38,9 +38,18 @@ Copy `.env.example` to `.env` and fill in values:
 
 ```sh
 cp .env.example .env    # then edit
-docker compose up --build
-ngrok http 8000         # expose to GitHub for testing
+docker compose up --build -d
 ```
+
+Forward GitHub webhooks to the local stack with [smee.io](https://smee.io) (use the smee channel URL as the webhook Payload URL):
+
+```sh
+docker run -d --name reopt-smee --restart unless-stopped \
+  --network gitdiscussionsassistant_default node:20-alpine \
+  npx -y smee-client@2.0.4 --url https://smee.io/<channel> --target http://web:8000/webhook
+```
+
+Smee does not replay events missed while the client was down; use **Redeliver** in the webhook's Recent Deliveries. Containers read `.env` only when created: after editing it, run `docker compose up -d` (not `restart`), and check a value with `docker compose exec worker printenv REOPT_EMAIL`.
 
 Note: the RQ worker requires a Unix-like OS (it forks), so run it via Docker or WSL on Windows.
 
@@ -92,18 +101,25 @@ GitHub needs a stable public HTTPS endpoint.
 
 ## Status and next steps (2026-11-08)
 
-**Working locally (verified):** signed test event → receiver → Redis queue → worker → NLR LiteLLM gateway (`gpt-5.4-mini`) → SendGrid → delivered to an `nlr.gov` inbox (landed in Junk).
+**Verified:**
+- *NLR-managed laptop:* signed test event (`send_test_event.py`) → receiver → Redis → worker → NLR LiteLLM gateway (`gpt-5.4-mini`) → SendGrid → `nlr.gov` inbox (Junk).
+- *Personal laptop, off NLR network:* real GitHub discussion → webhook → smee.io → receiver → Redis → worker → SendGrid → Gmail (Spam). Webhook signatures validate through smee. The LLM step used the fallback text because `litellm.nlr.gov` does not resolve outside NLR's network.
 
-**NLR network constraints found:**
-- Netskope on NLR-managed laptops intercepts TLS on every network (VPN or not). It blocks ngrok and smee.io event streams, so GitHub cannot deliver webhooks to a laptop. Use `scripts/send_test_event.py` locally.
-- Containers need the NREL CA chain to reach SendGrid through Netskope: export it into `certs/*.crt` (git-ignored; see Dockerfile). Not needed off NLR-managed machines.
-- The LLM key is for NLR's LiteLLM gateway (`OPENAI_BASE_URL=https://litellm.nlr.gov`), likely reachable only from NLR's network.
-- `nlr.gov` mail is Microsoft 365; mail from a Gmail sender via SendGrid goes to Junk.
+**Known constraints:**
+- Netskope on NLR-managed laptops intercepts TLS on every network and blocks ngrok and smee.io, so GitHub cannot deliver webhooks to them; containers there also need the NREL CA chain in `certs/*.crt` (git-ignored; see Dockerfile).
+- The LiteLLM gateway (`OPENAI_BASE_URL=https://litellm.nlr.gov`) is reachable only from NLR's network.
+- Spam/Junk is caused by the sender, not the content: `FROM_EMAIL` is a Gmail address sent through SendGrid, which fails Gmail/Microsoft sender authentication (DMARC alignment). "Not spam" does not fix it. Any deployment needs a SendGrid-authenticated domain (DNS records) or an SMTP relay for the sending domain.
 
-**Open decisions:**
-1. Hosting: an NLR server (can reach the LiteLLM gateway) vs. Render (`render.yaml`, needs a public OpenAI/Anthropic key).
-2. Email: an `nlr.gov`-authenticated SendGrid sender, or NLR's SMTP relay (would need SMTP support in `worker.py`).
-3. Delivery: webhooks need a public endpoint; alternative is a poller that queries the GitHub API for new discussions/comments (outbound-only, works on NLR's network).
+**Next steps — NLR testing:**
+1. Keep developing on a non-NLR machine with smee; set `OPENAI_BASE_URL`/`OPENAI_API_KEY` to a public OpenAI-compatible endpoint to test real drafted replies (or accept the fallback text).
+2. For testing inbox placement, create a Gmail filter "Never send to Spam" for the sender, or authenticate a personal domain in SendGrid and use it as `FROM_EMAIL`.
+3. On NLR-managed laptops, test the LiteLLM step with `scripts/send_test_event.py` only.
+
+**Next steps — NLR production:**
+1. **Hosting (decides LLM access):** an NLR-hosted server can use the LiteLLM gateway; an external host (Render via `render.yaml`) needs a public OpenAI/Anthropic key and approval to send discussion content there.
+2. **Inbound events:** webhooks need a public HTTPS endpoint, which an internal NLR server may not have. If not, replace the webhook with a poller that queries the GitHub API for new discussions/comments (outbound-only).
+3. **Email:** ask NLR IT for SendGrid domain authentication of `nlr.gov` (or a subdomain), or for NLR's SMTP relay (requires adding SMTP support to `worker.py`). Set `FROM_EMAIL` to the approved address and `REOPT_EMAIL` to `REopt@nlr.gov`.
+4. Set `TEAM_USERNAMES` to the real REopt team logins and replace the test webhook/smee URL with the production endpoint.
 
 ## Behavior notes
 
