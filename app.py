@@ -39,7 +39,7 @@ def looks_like_question(text: str) -> bool:
     if not text:
         return False
     t = text.lower()
-    keywords = ["?", "how", "why", "when", "what", "help", "error", "issue",
+    keywords = ["?", "how", "why", "when", "what", "where", "help", "error", "issue",
                 "request", "could", "should", "would"]
     return any(k in t for k in keywords)
 
@@ -47,6 +47,11 @@ def looks_like_question(text: str) -> bool:
 def should_skip_author(user: dict) -> bool:
     login = (user.get("login") or "").lower()
     return login in TEAM_USERNAMES or user.get("type") == "Bot"
+
+
+def skip(status: str, event: str, detail: str = "") -> dict:
+    log.info("Skipped %s event: %s %s", event or "unknown", status, detail)
+    return {"status": status}
 
 
 def enqueue_once(key: str, job: dict) -> bool:
@@ -82,17 +87,17 @@ async def webhook(
         raise HTTPException(status_code=400, detail="Invalid JSON")
 
     if payload.get("action") != "created":
-        return {"status": "ignored"}
+        return skip("ignored", event, f"action={payload.get('action')}")
 
     discussion = payload.get("discussion") or {}
     title = discussion.get("title", "")
 
     if event == "discussion":
         if should_skip_author(discussion.get("user") or {}):
-            return {"status": "skipped_author"}
+            return skip("skipped_author", event, (discussion.get("user") or {}).get("login", ""))
         body_text = discussion.get("body") or ""
         if not looks_like_question(body_text):
-            return {"status": "not_a_question"}
+            return skip("not_a_question", event, f"discussion={discussion.get('id')}")
         job = {
             "type": "discussion",
             "id": discussion.get("id"),
@@ -107,10 +112,10 @@ async def webhook(
         comment = payload.get("comment") or {}
         user = comment.get("user") or {}
         if should_skip_author(user):
-            return {"status": "skipped_author"}
+            return skip("skipped_author", event, user.get("login", ""))
         body_text = comment.get("body") or ""
         if not looks_like_question(body_text):
-            return {"status": "not_a_question"}
+            return skip("not_a_question", event, f"comment={comment.get('id')}")
         job = {
             "type": "comment",
             "id": comment.get("id"),
@@ -122,9 +127,9 @@ async def webhook(
         key = f"comment:{job['id']}"
 
     else:
-        return {"status": "ignored"}
+        return skip("ignored", event, "unhandled event type")
 
     if not enqueue_once(key, job):
-        return {"status": "already_processed"}
+        return skip("already_processed", event, key)
     log.info("Enqueued %s", key)
     return {"status": "accepted"}

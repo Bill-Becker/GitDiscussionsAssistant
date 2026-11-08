@@ -32,6 +32,7 @@ Copy `.env.example` to `.env` and fill in values:
 | `FROM_EMAIL` | Verified SendGrid sender, e.g. `reopt-notify@nlr.gov` |
 | `REOPT_EMAIL` | Recipient, e.g. `REopt@nlr.gov` |
 | `REDIS_URL` | Set automatically in docker-compose |
+| `SMEE_URL` | Local testing only: smee.io channel for the optional `smee` compose service |
 | `TEAM_USERNAMES` | Comma-separated logins to ignore (bot accounts are always ignored) |
 
 ## Run locally
@@ -41,12 +42,11 @@ cp .env.example .env    # then edit
 docker compose up --build -d
 ```
 
-Forward GitHub webhooks to the local stack with [smee.io](https://smee.io) (use the smee channel URL as the webhook Payload URL):
+To receive real GitHub webhooks locally, create a channel at [smee.io](https://smee.io), use its URL as the webhook Payload URL, set `SMEE_URL` in `.env`, and enable the optional `smee` service, which forwards events to `web`:
 
 ```sh
-docker run -d --name reopt-smee --restart unless-stopped \
-  --network gitdiscussionsassistant_default node:20-alpine \
-  npx -y smee-client@2.0.4 --url https://smee.io/<channel> --target http://web:8000/webhook
+docker compose --profile smee up --build -d
+docker compose --profile smee down      # include the profile so smee is stopped too
 ```
 
 Smee does not replay events missed while the client was down; use **Redeliver** in the webhook's Recent Deliveries. Containers read `.env` only when created: after editing it, run `docker compose up -d` (not `restart`), and check a value with `docker compose exec worker printenv REOPT_EMAIL`.

@@ -31,5 +31,19 @@ services:
     depends_on:
       - redis
 
+  # Optional, local testing only: forwards GitHub webhooks from a smee.io channel to web.
+  # Start with: docker compose --profile smee up -d   (requires SMEE_URL in .env)
+  smee:
+    image: node:20-alpine
+    profiles: ["smee"]
+    restart: unless-stopped
+    environment:
+      - SMEE_URL=${SMEE_URL:-}
+    command: >-
+      sh -c 'test -n "$$SMEE_URL" || { echo "SMEE_URL is not set in .env"; exit 1; };
+      exec npx -y smee-client@2.0.4 --url "$$SMEE_URL" --target http://web:8000/webhook'
+    depends_on:
+      - web
+
 volumes:
   redis-data:
