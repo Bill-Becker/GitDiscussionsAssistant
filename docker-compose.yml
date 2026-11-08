@@ -1,0 +1,35 @@
+x-build: &build
+  context: .
+  args:
+    # Set in .env when building on NLR's network; leave empty elsewhere.
+    NREL_ROOT_CERT_URL_ROOT: ${NREL_ROOT_CERT_URL_ROOT:-}
+
+services:
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  web:
+    build: *build
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+
+  worker:
+    build: *build
+    command: rq worker reopt --url redis://redis:6379
+    env_file: .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+
+volumes:
+  redis-data:

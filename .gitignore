@@ -1,0 +1,7 @@
+.env
+# Local-network CA certs; not needed off NLR's network
+certs/*.crt
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/

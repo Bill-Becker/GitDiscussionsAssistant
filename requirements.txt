@@ -1,0 +1,6 @@
+fastapi>=0.110
+uvicorn[standard]>=0.29
+redis>=5.0
+rq>=1.16
+requests>=2.31
+openai>=1.30

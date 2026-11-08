@@ -1,0 +1,48 @@
+# Render Blueprint: web receiver + RQ worker + Key Value (Redis).
+# Render dashboard -> New -> Blueprint -> pick this repo. Values marked sync: false are prompted for.
+services:
+  - type: web
+    name: reopt-webhook
+    runtime: docker
+    plan: free
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: reopt-redis
+          property: connectionString
+      - key: GITHUB_WEBHOOK_SECRET
+        generateValue: true   # copy it from the dashboard into the GitHub webhook "Secret" field
+      - key: TEAM_USERNAMES
+        sync: false
+
+  - type: worker
+    name: reopt-worker
+    runtime: docker
+    plan: starter            # background workers have no free plan
+    dockerCommand: python worker.py
+    envVars:
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: reopt-redis
+          property: connectionString
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: FROM_EMAIL
+        sync: false
+      - key: REOPT_EMAIL
+        sync: false
+
+  - type: keyvalue
+    name: reopt-redis
+    plan: free
+    ipAllowList: []          # reachable only from your Render services
+    maxmemoryPolicy: noeviction
