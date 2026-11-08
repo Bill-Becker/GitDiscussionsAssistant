@@ -28,6 +28,9 @@ services:
     env_file: .env
     environment:
       - REDIS_URL=redis://redis:6379
+    volumes:
+      # Live-mount guidance so edits apply to the next job without a rebuild.
+      - ./guidance:/app/guidance:ro
     depends_on:
       - redis
 

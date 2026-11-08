@@ -15,6 +15,8 @@ GitHub (discussion / discussion_comment)
 |---|---|
 | `app.py` | Webhook receiver (`POST /webhook`, `GET /healthz`) |
 | `worker.py` | RQ job: generate suggested reply, send email |
+| `guidance.py` | Loads AI guidance and selects skills for each post |
+| `guidance/` | Editable AI instructions: `system.md` (always) and `skills/*.md` (by keyword) |
 | `docker-compose.yml` | Local stack: redis + web + worker |
 | `.env.example` | Environment variable template |
 | `tests/` | Receiver tests (fakeredis, no network) |
@@ -33,6 +35,32 @@ Copy `.env.example` to `.env` and fill in values:
 | `REOPT_EMAIL` | Recipient, e.g. `REopt@nlr.gov` |
 | `REDIS_URL` | Set automatically in docker-compose |
 | `SMEE_URL` | Local testing only: smee.io channel for the optional `smee` compose service |
+| `OPENAI_MAX_TOKENS` | Max tokens for the drafted reply (default `700`) |
+| `GUIDANCE_MAX_SKILLS` | Max keyword-matched skills per prompt (default `3`; `always` skills don't count) |
+
+## AI guidance and skills
+
+The model's instructions are Markdown files in `guidance/`, so the team can tune replies without changing code:
+
+- `guidance/system.md` — applies to every post: role, tone, policies, and the output format of the email draft.
+- `guidance/skills/*.md` — topic-specific guidance. Each starts with a front-matter block:
+
+  ```
+  ---
+  name: Troubleshooting errors
+  keywords: error, fail, infeasible, "stack trace"
+  always: false
+  ---
+  Instructions for the model when this applies...
+  ```
+
+  A skill is added when a keyword appears in the post's title or body (case-insensitive, whole word or phrase), best matches first, up to `GUIDANCE_MAX_SKILLS`. `always: true` includes it in every prompt. Copy `skills/_template.md` to start one; files beginning with `_` are ignored. `<!-- comments -->` are stripped before sending, so use them for notes to authors.
+
+Files are re-read for each job and mounted into the worker by docker-compose, so edits apply to the next post without a rebuild (deployments pick them up on the next build). The email lists which skills were applied. Preview the exact system prompt for a post:
+
+```sh
+docker compose exec worker python guidance.py "Run failed" "My run fails with an infeasible error"
+```
 | `TEAM_USERNAMES` | Comma-separated logins to ignore (bot accounts are always ignored) |
 
 ## Run locally
